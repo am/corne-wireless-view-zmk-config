@@ -16,3 +16,6 @@ ZMK configuration for my Corne Wireless keyboard. Hardware use for the current b
 ## Current layout
 
 ![layer 0](./docs/layer-0.png)
+![layer 1](./docs/layer-1.png)
+![layer 2](./docs/layer-2.png)
+![layer 3](./docs/layer-3.png)
