@@ -11,6 +11,8 @@
 #   - board: nice_nano_v2
 #     shield: reviung41
 #
+# Bump the number below to invalidate the Actions cache (comment only, not in matrix)
+# cache: 2
 ---
 include:
   - board: nice_nano_v2
