@@ -63,3 +63,11 @@
         };
     };
 };
+
+// Mod-tap: tap-preferred so pressing another key while held (e.g. while
+// typing) doesn't force the modifier; only actual hold time does.
+// Slightly longer tapping term gives more margin for taps.
+&mt {
+    flavor = "tap-preferred";
+    tapping-term-ms = <250>;
+};
