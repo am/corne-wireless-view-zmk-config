@@ -25,10 +25,10 @@
         default_layer {
             display-name = "Base";
             bindings = <
-&kp TAB         &kp Q  &kp W        &kp E       &kp R       &kp T      &kp Y        &kp U       &kp I       &kp O       &kp P     &kp BSPC
-&mt LCTRL ESC   &kp A  &mt LALT S   &mt LGUI D  &mt LSHFT F &kp G      &kp H        &mt LSHFT J &mt LGUI K  &mt LALT L  &kp SEMI  &kp SQT
-&mt LSHFT CAPS  &kp Z  &kp X        &kp C       &kp V       &kp B      &kp N        &kp M       &kp COMMA   &kp DOT     &kp FSLH  &mt RSHFT RET
-                                    &td0        &mo 1       &kp SPACE  &lt 3 SPACE  &mo 2       &kp RALT
+&kp TAB         &kp Q  &kp W       &kp E       &kp R        &kp T        &kp Y        &kp U        &kp I       &kp O       &kp P     &kp BSPC
+&mt LCTRL ESC   &kp A  &mt LALT S  &mt LGUI D  &mt LSHFT F  &kp G        &kp H        &mt LSHFT J  &mt LGUI K  &mt LALT L  &kp SEMI  &kp SQT
+&mt LSHFT CAPS  &kp Z  &kp X       &kp C       &kp V        &kp B        &kp N        &kp M        &kp COMMA   &kp DOT     &kp FSLH  &mt RSHFT RET
+                                   &td0        &mo 1        &kp SPACE    &lt 3 SPACE  &mo 2        &kp RALT
             >;
         };
 
@@ -55,10 +55,10 @@
         cursor_layer {
             display-name = "Fun";
             bindings = <
-&trans  &trans  &trans  &trans  &trans  &trans    &kp C_PREV  &kp C_PP      &kp C_NEXT    &trans     &trans  &trans
-&trans  &trans  &trans  &trans  &trans  &trans    &kp LEFT    &kp DOWN      &kp UP        &kp RIGHT  &trans  &trans
-&trans  &trans  &trans  &trans  &trans  &trans    &kp C_MUTE  &kp C_VOL_DN  &kp C_VOL_UP  &trans     &trans  &trans
-                        &trans  &trans  &trans    &trans      &trans        &trans
+&trans  &trans  &kp K_PREVIOUS  &kp C_PLAY    &kp C_NEXT    &trans    &trans    &trans    &trans  &trans     &trans  &trans
+&trans  &trans  &kp C_MUTE      &kp C_VOL_DN  &kp C_VOL_UP  &trans    &kp LEFT  &kp DOWN  &kp UP  &kp RIGHT  &trans  &trans
+&trans  &trans  &trans          &trans        &trans        &trans    &trans    &trans    &trans  &trans     &trans  &trans
+                                &trans        &trans        &trans    &trans    &trans    &trans
             >;
         };
     };
@@ -67,6 +67,7 @@
 // Mod-tap: tap-preferred so pressing another key while held (e.g. while
 // typing) doesn't force the modifier; only actual hold time does.
 // Slightly longer tapping term gives more margin for taps.
+
 &mt {
     flavor = "tap-preferred";
     tapping-term-ms = <250>;
