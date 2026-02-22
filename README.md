@@ -75,4 +75,4 @@ Legend: empty cell = transparent (pass-through); `Layer 1`/`Layer 2` = momentary
 2. Edit the layout.
 3. Use the option to `View keymap data` and copy the output.
 4. Modify the local file and commit.
-5. To refresh the keymap diagrams in this README, run `python3 scripts/keymap-to-ascii.py` and paste the output into the Keymap reference section above. To control how keycodes appear (e.g. new ones), add or edit entries in `scripts/keycode-labels.json`.
+5. To refresh the keymap diagrams in this README, run `python3 scripts/keymap-to-ascii.py` and paste the output into the Keymap reference section above. Edit `scripts/keycode-labels.json` to change how keycodes appear (e.g. new ones).

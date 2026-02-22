@@ -23,58 +23,31 @@ _keycode_labels_cache: Optional[Dict[str, str]] = None
 
 
 def _load_keycode_labels() -> Dict[str, str]:
-    """Load keycode -> label mapping from keycode-labels.json if present; else return built-in default."""
-    builtin = {
-        "BACKSPACE": "BSp", "ESCAPE": "Esc", "RETURN": "Ret", "ENTER": "Ent",
-        "SEMICOLON": "SEMI", "SEMI": "SEMI", "SQT": "'", "APOSTROPHE": "'",
-        "BACKSLASH": "BSLH", "QUESTION": "?", "QMARK": "?", "PIPE": "|",
-        "LEFT_PARENTHESIS": "(", "LPAR": "(", "RIGHT_PARENTHESIS": ")", "RPAR": ")",
-        "LEFT_BRACKET": "[", "LBKT": "[", "RIGHT_BRACKET": "]", "RBKT": "]",
-        "LEFT_BRACE": "{", "LBRC": "{", "RIGHT_BRACE": "}", "RBRC": "}",
-        "EXCLAMATION": "!", "EXCL": "!", "AT": "@", "HASH": "#", "POUND": "#",
-        "DOLLAR": "$", "DLLR": "$", "PERCENT": "%", "PRCNT": "%",
-        "CARET": "^", "AMPERSAND": "&", "AMPS": "&", "STAR": "*", "ASTERISK": "*",
-        "MINUS": "-", "PLUS": "+", "EQUAL": "=", "UNDERSCORE": "_", "UNDER": "_",
-        "SLASH": "/", "FSLH": "/", "COMMA": ",", "DOT": ".", "PERIOD": ".",
-        "GRAVE": "`", "TILDE": "~",
-        "CAPS": "Caps", "CAPSLOCK": "Caps",
-        "LCTRL": "LC", "RCTRL": "RC", "LSHFT": "LS", "RSHFT": "RS",
-        "LALT": "LA", "RALT": "RA", "LGUI": "LG", "RGUI": "RG",
-        "K_PREVIOUS": "Prev", "K_PREV": "Prev", "C_PLAY": "Play", "C_NEXT": "Next",
-        "C_PLAY_PAUSE": "Play", "C_PP": "Play",
-        "C_MUTE": "Mute", "C_VOL_DN": "VolDn", "C_VOL_UP": "VolUp",
-        "C_VOLUME_DOWN": "VolDn", "C_VOLUME_UP": "VolUp",
-        "LEFT": "←", "RIGHT": "→", "UP": "↑", "DOWN": "↓",
-        "BT_SEL": "BT", "BT_CLR": "Clr",
-        "N1": "1", "N2": "2", "N3": "3", "N4": "4", "N5": "5",
-        "N6": "6", "N7": "7", "N8": "8", "N9": "9", "N0": "0",
-        "SPACE": "Sp",
-    }
+    """Load keycode -> label mapping from keycode-labels.json (next to this script)."""
     global _keycode_labels_cache
     if _keycode_labels_cache is not None:
         return _keycode_labels_cache
     script_dir = Path(__file__).resolve().parent
     path = script_dir / "keycode-labels.json"
-    if path.exists():
-        try:
-            with open(path, encoding="utf-8") as f:
-                custom = json.load(f)
-            builtin.update(custom)
-        except (json.JSONDecodeError, OSError):
-            pass
-    _keycode_labels_cache = builtin
-    return builtin
+    if not path.exists():
+        print(f"Keycode labels not found: {path}", file=sys.stderr)
+        sys.exit(1)
+    with open(path, encoding="utf-8") as f:
+        _keycode_labels_cache = dict(json.load(f))
+    return _keycode_labels_cache
 
 
 def shorten_keycode(raw: str, abbrev: Optional[Dict[str, str]] = None) -> str:
-    """Shorten keycode for display in ASCII cell. Uses keycode-labels.json if present."""
+    """Shorten keycode for display in ASCII cell. Uses keycode-labels.json."""
     if abbrev is None:
         abbrev = _load_keycode_labels()
     s = raw.strip()
     if not s:
         return "-"
+    if s in abbrev:
+        return abbrev[s]
     for full, short in abbrev.items():
-        if s == full or s.endswith(" " + full):
+        if s.endswith(" " + full):
             return short
     # Strip K_/C_ prefix for brevity when not in abbrev
     if s.startswith("K_") and len(s) > 6:
@@ -145,7 +118,7 @@ def parse_binding(token: str) -> str:
     # &bt ...
     if token.lower().startswith("bt "):
         return "BT"
-    return token[: CELL_WIDTH - 2] if len(token) > CELL_WIDTH else token
+    return token[:CELL_WIDTH - 2] if len(token) > CELL_WIDTH else token
 
 
 def extract_bindings(content: str) -> list[str]:
@@ -163,13 +136,9 @@ def extract_layers(keymap_path: Path) -> list[tuple[str, list[str]]]:
     """Parse keymap file and return [(display_name, [binding_labels]), ...]."""
     text = keymap_path.read_text()
     layers = []
-    # Find each layer block: optional display-name = "Name"; then bindings = < ... >;
-    layer_blocks = re.split(
-        r"(\w+_layer)\s*\{", text
-    )
-    for i in range(1, len(layer_blocks), 2):
-        block_name = layer_blocks[i]
-        block_content = layer_blocks[i + 1]
+    # Find each layer block: split gives (..., name1, content1, name2, content2, ...)
+    layer_blocks = re.split(r"(\w+_layer)\s*\{", text)
+    for block_name, block_content in zip(layer_blocks[1::2], layer_blocks[2::2]):
         display_name = "Layer"
         m = re.search(r'display-name\s*=\s*"([^"]+)"', block_content)
         if m:
@@ -183,6 +152,11 @@ def extract_layers(keymap_path: Path) -> list[tuple[str, list[str]]]:
 def _box_row(seg: str, left: str, mid: str, right: str, n: int) -> str:
     """One horizontal line: left + (seg+mid)*(n-1) + seg + right. Uses seg = BOX_H*CELL_WIDTH."""
     return left + (seg + mid) * (n - 1) + seg + right
+
+
+def _labels_slice(labels: list[str], start: int, n: int) -> list[str]:
+    """Return n labels from start, or '?' when past the end."""
+    return [labels[start + i] if start + i < len(labels) else "?" for i in range(n)]
 
 
 def _cell(lbl: str) -> str:
@@ -210,14 +184,14 @@ def draw_layer(name: str, labels: list[str]) -> str:
     right_bot = "├" + seg + "┼" + seg + "┼" + seg + "┼" + seg + "┴" + seg + "┴" + seg + "┘"
 
     for row in range(3):
-        left_labels = [labels[idx + i] if idx + i < len(labels) else "?" for i in range(row_size)]
-        right_labels = [labels[idx + row_size + i] if idx + row_size + i < len(labels) else "?" for i in range(row_size)]
+        left_labels = _labels_slice(labels, idx, row_size)
+        right_labels = _labels_slice(labels, idx + row_size, row_size)
         idx += 2 * row_size
 
         if row == 0:
             lines.append(left_top + GAP + right_top)
-        content_left = sep + sep.join([_cell(l) for l in left_labels]) + sep
-        content_right = sep + sep.join([_cell(l) for l in right_labels]) + sep
+        content_left = sep + sep.join([_cell(label) for label in left_labels]) + sep
+        content_right = sep + sep.join([_cell(label) for label in right_labels]) + sep
         lines.append(content_left + GAP + content_right)
         if row == 2:
             lines.append(left_bot + GAP + right_bot)
@@ -225,11 +199,12 @@ def draw_layer(name: str, labels: list[str]) -> str:
             lines.append(left_mid + GAP + right_mid)
 
     # Thumb row: 3+3 aligned to inner side (indent = 12 spaces to match template)
-    left_labels = [labels[idx + i] if idx + i < len(labels) else "?" for i in range(3)]
-    right_labels = [labels[idx + 3 + i] if idx + 3 + i < len(labels) else "?" for i in range(3)]
+    left_labels = _labels_slice(labels, idx, 3)
+    right_labels = _labels_slice(labels, idx + 3, 3)
     indent = " " * THUMB_INDENT
-    content_left = indent + sep + sep.join([_cell(l) for l in left_labels]) + sep
-    content_right = sep + sep.join([_cell(l) for l in right_labels]) + sep
+    content_left = indent + sep + sep.join([_cell(label) for label in left_labels]) + sep
+    content_right = sep + sep.join([_cell(label) for label in right_labels]) + sep
+    # Bottom border: 3 cells each side (└┴┴┘ and └┴┴┘)
     left_thumb_bot = _box_row(seg, "└", "┴", "┘", 3)
     right_thumb_bot = _box_row(seg, "└", "┴", "┘", 3)
     lines.append(content_left + GAP + content_right)
