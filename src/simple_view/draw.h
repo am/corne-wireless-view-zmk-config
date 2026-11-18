@@ -40,6 +40,8 @@ struct sv_state {
     /* Central: highest active layer and the number of keymap layers. */
     uint8_t layer_index;
     uint8_t layer_count;
+    /* Show the base layer as the second tile of the stack, see draw.c. */
+    bool layer_base_second;
 
     /* Peripheral: frame of the swell animation, any value. */
     int frame;

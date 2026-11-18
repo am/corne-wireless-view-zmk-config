@@ -157,6 +157,7 @@ struct layer_state {
 static void layer_update_cb(struct layer_state layer) {
     state.layer_index = layer.index;
     state.layer_count = ZMK_KEYMAP_LAYERS_LEN;
+    state.layer_base_second = IS_ENABLED(CONFIG_NICE_VIEW_SIMPLE_BASE_LAYER_SECOND);
     redraw();
 }
 

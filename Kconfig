@@ -10,6 +10,16 @@ config NICE_VIEW_SIMPLE
 
 if NICE_VIEW_SIMPLE
 
+config NICE_VIEW_SIMPLE_BASE_LAYER_SECOND
+    bool "Show the base layer as the second tile of the layer stack"
+    default y
+    help
+      The layer stack has one tile per keymap layer. With this option the
+      base layer is the second tile from the bottom and the first layer
+      above it in the keymap (usually "lower") is the bottom tile, so the
+      stack reads lower, base, raise. Without it the tiles follow keymap
+      order with the base layer at the bottom.
+
 config NICE_VIEW_SIMPLE_ANIMATION
     bool "Animate the peripheral half's screen when it starts or connects"
     default y

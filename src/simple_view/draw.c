@@ -168,15 +168,16 @@ static void draw_tile(int cx, int top, enum tile_style style) {
 }
 
 /*
- * Tile that stands for a keymap layer, counted from the bottom. The base
- * layer is the second tile and the first layer above it in the keymap (the
- * "lower" layer) is the one beneath; higher layers follow in keymap order.
+ * Tile that stands for a keymap layer, counted from the bottom. In keymap
+ * order the base layer is the bottom tile. With base_second the base layer
+ * is the second tile and the first layer above it in the keymap (usually
+ * "lower") is the one beneath; higher layers follow in keymap order.
  */
-static int layer_tile(int layer, int count) {
-    if (count >= 2 && layer < 2) {
-        return 1 - layer;
+static int layer_tile(const struct sv_state *state) {
+    if (state->layer_base_second && state->layer_count >= 2 && state->layer_index < 2) {
+        return 1 - state->layer_index;
     }
-    return layer;
+    return state->layer_index;
 }
 
 static void draw_layers(const struct sv_state *state, int band_top, int band_bottom) {
@@ -184,7 +185,7 @@ static void draw_layers(const struct sv_state *state, int band_top, int band_bot
     if (count < 1) {
         return;
     }
-    int active = layer_tile(state->layer_index, count);
+    int active = layer_tile(state);
     int step = TILE_STEP;
     while (count > 1 && TILE_H + (count - 1) * step > band_bottom - band_top && step > 4) {
         step--;
