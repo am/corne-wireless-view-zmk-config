@@ -1,20 +1,19 @@
 /*
  * Simple vertical nice!view status screen: drawing.
  *
- * The panel is 160x68 in landscape. Like the stock nice!view widget, the
- * screen is built from three 68x68 canvases that are drawn upright and then
- * rotated, so on an upright panel they read top to bottom:
- *
- *   top     (68x68)  output + battery
- *   middle  (68x68)  layer
- *   bottom  (24 px)  WPM
+ * The screen is drawn as a 68x160 portrait image, one bit per pixel, straight
+ * from bitmap fonts and icons: nothing is scaled, rotated or smoothed on the
+ * way. sv_render() calls sv_px() for every lit pixel; the caller clears its
+ * buffer first and maps portrait pixels to the panel.
  */
 
 #pragma once
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <lvgl.h>
+
+#define SV_WIDTH 68
+#define SV_HEIGHT 160
 
 enum sv_output {
     SV_OUTPUT_NONE,
@@ -31,14 +30,15 @@ struct sv_state {
     /* Central: selected output. Peripheral: link to the central half. */
     enum sv_output output;
     int profile_index;
+    int profile_count;
     bool connected;
     bool bonded;
 
     uint8_t layer_index;
     const char *layer_label;
-    uint8_t wpm;
 };
 
-void sv_draw_top(lv_obj_t *canvas, lv_color_t cbuf[], const struct sv_state *state);
-void sv_draw_middle(lv_obj_t *canvas, lv_color_t cbuf[], const struct sv_state *state);
-void sv_draw_bottom(lv_obj_t *canvas, lv_color_t cbuf[], const struct sv_state *state);
+/* Provided by the caller: light one pixel of the portrait image. */
+void sv_px(int x, int y);
+
+void sv_render(const struct sv_state *state);

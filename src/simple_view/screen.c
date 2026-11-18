@@ -1,6 +1,10 @@
 /*
  * Simple vertical nice!view status screen: ZMK events and the screen itself.
  * Event handling follows ZMK's stock nice!view widget.
+ *
+ * The panel is 160x68 in landscape and sits upright on the keyboard, so the
+ * 68x160 portrait image from draw.c is written into one full-screen canvas
+ * turned a quarter: the portrait's top edge is the panel's right edge.
  */
 
 #include <zephyr/kernel.h>
@@ -20,44 +24,48 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include <zmk/ble.h>
 #include <zmk/endpoints.h>
 #include <zmk/keymap.h>
-#include <zmk/wpm.h>
 #include <zmk/events/ble_active_profile_changed.h>
 #include <zmk/events/endpoint_changed.h>
 #include <zmk/events/layer_state_changed.h>
-#include <zmk/events/wpm_state_changed.h>
 #else
 #include <zmk/split/bluetooth/peripheral.h>
 #include <zmk/events/split_peripheral_status_changed.h>
 #endif
 
-#include "util.h"
+#include <lvgl.h>
+
 #include "draw.h"
 
-static lv_obj_t *canvas_top;
-static lv_obj_t *canvas_middle;
-static lv_obj_t *canvas_bottom;
-static lv_color_t cbuf_top[CANVAS_SIZE * CANVAS_SIZE];
-static lv_color_t cbuf_middle[CANVAS_SIZE * CANVAS_SIZE];
-static lv_color_t cbuf_bottom[CANVAS_SIZE * CANVAS_SIZE];
+#define PANEL_W 160
+#define PANEL_H 68
+
+#define FOREGROUND                                                                                 \
+    (IS_ENABLED(CONFIG_NICE_VIEW_WIDGET_INVERTED) ? lv_color_white() : lv_color_black())
+#define BACKGROUND                                                                                 \
+    (IS_ENABLED(CONFIG_NICE_VIEW_WIDGET_INVERTED) ? lv_color_black() : lv_color_white())
+
+static lv_obj_t *canvas;
+static lv_color_t cbuf[PANEL_W * PANEL_H];
 
 static struct sv_state state = {.peripheral = !SV_CENTRAL};
 
-static void redraw_top(void) {
-    if (canvas_top != NULL) {
-        sv_draw_top(canvas_top, cbuf_top, &state);
+void sv_px(int x, int y) {
+    if (x < 0 || x >= SV_WIDTH || y < 0 || y >= SV_HEIGHT) {
+        return;
     }
+    cbuf[x * PANEL_W + (PANEL_W - 1 - y)] = FOREGROUND;
 }
 
-static void redraw_middle(void) {
-    if (canvas_middle != NULL) {
-        sv_draw_middle(canvas_middle, cbuf_middle, &state);
+static void redraw(void) {
+    if (canvas == NULL) {
+        return;
     }
-}
-
-static void redraw_bottom(void) {
-    if (canvas_bottom != NULL) {
-        sv_draw_bottom(canvas_bottom, cbuf_bottom, &state);
+    lv_color_t background = BACKGROUND;
+    for (int i = 0; i < PANEL_W * PANEL_H; i++) {
+        cbuf[i] = background;
     }
+    sv_render(&state);
+    lv_obj_invalidate(canvas);
 }
 
 /* Battery (both halves) */
@@ -70,10 +78,7 @@ struct battery_state {
 static void battery_update_cb(struct battery_state battery) {
     state.battery = battery.level;
     state.charging = battery.usb_present;
-    redraw_top();
-    if (state.peripheral) {
-        redraw_middle();
-    }
+    redraw();
 }
 
 static struct battery_state battery_get_state(const zmk_event_t *eh) {
@@ -109,7 +114,8 @@ static void output_update_cb(struct output_state output) {
     state.profile_index = output.profile_index;
     state.connected = output.connected;
     state.bonded = output.bonded;
-    redraw_top();
+    state.profile_count = IS_ENABLED(CONFIG_ZMK_BLE) ? ZMK_BLE_PROFILE_COUNT : 0;
+    redraw();
 }
 
 static struct output_state output_get_state(const zmk_event_t *_eh) {
@@ -152,7 +158,7 @@ struct layer_state {
 static void layer_update_cb(struct layer_state layer) {
     state.layer_index = layer.index;
     state.layer_label = layer.label;
-    redraw_middle();
+    redraw();
 }
 
 static struct layer_state layer_get_state(const zmk_event_t *_eh) {
@@ -166,27 +172,6 @@ static struct layer_state layer_get_state(const zmk_event_t *_eh) {
 ZMK_DISPLAY_WIDGET_LISTENER(sv_layer, struct layer_state, layer_update_cb, layer_get_state)
 ZMK_SUBSCRIPTION(sv_layer, zmk_layer_state_changed);
 
-/* WPM */
-
-struct wpm_state {
-    uint8_t wpm;
-};
-
-static void wpm_update_cb(struct wpm_state wpm) {
-    if (wpm.wpm == state.wpm) {
-        return;
-    }
-    state.wpm = wpm.wpm;
-    redraw_bottom();
-}
-
-static struct wpm_state wpm_get_state(const zmk_event_t *_eh) {
-    return (struct wpm_state){.wpm = zmk_wpm_get_state()};
-}
-
-ZMK_DISPLAY_WIDGET_LISTENER(sv_wpm, struct wpm_state, wpm_update_cb, wpm_get_state)
-ZMK_SUBSCRIPTION(sv_wpm, zmk_wpm_state_changed);
-
 #else /* peripheral */
 
 /* Link to the central half */
@@ -197,7 +182,7 @@ struct link_state {
 
 static void link_update_cb(struct link_state link) {
     state.connected = link.connected;
-    redraw_top();
+    redraw();
 }
 
 static struct link_state link_get_state(const zmk_event_t *_eh) {
@@ -209,32 +194,18 @@ ZMK_SUBSCRIPTION(sv_link, zmk_split_peripheral_status_changed);
 
 #endif /* SV_CENTRAL */
 
-static lv_obj_t *create_canvas(lv_obj_t *parent, lv_color_t cbuf[], lv_align_t align,
-                               lv_coord_t x) {
-    lv_obj_t *canvas = lv_canvas_create(parent);
-    lv_obj_align(canvas, align, x, 0);
-    lv_canvas_set_buffer(canvas, cbuf, CANVAS_SIZE, CANVAS_SIZE, LV_IMG_CF_TRUE_COLOR);
-    return canvas;
-}
-
 lv_obj_t *zmk_display_status_screen() {
     lv_obj_t *screen = lv_obj_create(NULL);
 
-    /* Same placement as the stock widget: top tile at the panel's right end.
-     * The canvases sit on the screen itself, so no theme padding shifts them. */
-    canvas_top = create_canvas(screen, cbuf_top, LV_ALIGN_TOP_RIGHT, 0);
-    canvas_middle = create_canvas(screen, cbuf_middle, LV_ALIGN_TOP_LEFT, 24);
-    canvas_bottom = create_canvas(screen, cbuf_bottom, LV_ALIGN_TOP_LEFT, -44);
-
-    redraw_top();
-    redraw_middle();
-    redraw_bottom();
+    canvas = lv_canvas_create(screen);
+    lv_obj_align(canvas, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_canvas_set_buffer(canvas, cbuf, PANEL_W, PANEL_H, LV_IMG_CF_TRUE_COLOR);
+    redraw();
 
     sv_battery_init();
 #if SV_CENTRAL
     sv_output_init();
     sv_layer_init();
-    sv_wpm_init();
 #else
     sv_link_init();
 #endif

@@ -7,13 +7,8 @@ if(CONFIG_NICE_VIEW_SIMPLE)
       "set CONFIG_NICE_VIEW_WIDGET_STATUS=n")
   endif()
 
-  # Canvas helpers (rotate_canvas, init_label_dsc, ...) come from ZMK's own
-  # nice_view shield, which only compiles them for its stock widget.
-  set(nice_view_widgets ${APPLICATION_SOURCE_DIR}/boards/shields/nice_view/widgets)
-  target_include_directories(app PRIVATE ${nice_view_widgets} ${CMAKE_CURRENT_SOURCE_DIR}/src/simple_view)
   target_sources(app PRIVATE
-    ${nice_view_widgets}/util.c
-    ${nice_view_widgets}/bolt.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/simple_view/assets.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/simple_view/draw.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/simple_view/screen.c
   )
