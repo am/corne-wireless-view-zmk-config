@@ -2,10 +2,10 @@
 
 extern const struct sv_icon sv_icon_usb;
 extern const struct sv_icon sv_icon_bluetooth;
-extern const struct sv_icon sv_icon_battery;
-extern const struct sv_icon sv_icon_charging;
-extern const struct sv_icon sv_icon_ok;
-extern const struct sv_icon sv_icon_off;
+extern const struct sv_icon sv_icon_linked;
+extern const struct sv_icon sv_icon_unlinked;
 extern const struct sv_icon sv_icon_pairing;
 extern const struct sv_icon sv_icon_profile;
 extern const struct sv_icon sv_icon_profile_active;
+extern const struct sv_icon sv_icon_battery;
+extern const struct sv_icon sv_icon_charging;

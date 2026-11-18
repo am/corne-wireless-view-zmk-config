@@ -18,11 +18,14 @@
 #include "assets.h"
 #include "draw.h"
 
-#define OUTPUT_H 32
+#define OUTPUT_H 21
 #define OUTPUT_INSET 8
 #define ROW_OUTPUT 4
 #define ROW_PROFILES (ROW_OUTPUT + OUTPUT_H + 8)
-#define ROW_BATTERY (SV_HEIGHT - 8 - 16)
+#define ROW_BATTERY (SV_HEIGHT - 10 - 12)
+
+/* Width of the battery icon without its terminal. */
+#define BATTERY_BODY 25
 
 #define MAX_PROFILES 5
 #define PROFILE_GAP 3
@@ -74,16 +77,16 @@ static void draw_output(const struct sv_state *state) {
 
     if (state->peripheral) {
         icon = &sv_icon_bluetooth;
-        status = state->connected ? &sv_icon_ok : &sv_icon_off;
+        status = state->connected ? &sv_icon_linked : &sv_icon_unlinked;
     } else if (state->output == SV_OUTPUT_USB) {
         icon = &sv_icon_usb;
-        status = &sv_icon_ok;
+        status = &sv_icon_linked;
     } else if (state->output == SV_OUTPUT_BLE) {
         icon = &sv_icon_bluetooth;
         if (!state->bonded) {
             status = &sv_icon_pairing;
         } else {
-            status = state->connected ? &sv_icon_ok : &sv_icon_off;
+            status = state->connected ? &sv_icon_linked : &sv_icon_unlinked;
         }
     }
     if (icon == NULL) {
@@ -193,11 +196,11 @@ static void draw_battery(const struct sv_state *state) {
     draw_icon(x, ROW_BATTERY, &sv_icon_battery);
 
     if (state->charging) {
-        /* The bolt stands over the battery, taller than it, with a clear
-         * border so it reads against the outline. */
-        draw_icon_cutout(x + 2 + (32 - sv_icon_charging.width) / 2,
+        /* The bolt replaces the cells, with a clear pixel around it where it
+         * meets the outline. */
+        draw_icon_cutout(x + (BATTERY_BODY - sv_icon_charging.width) / 2,
                          ROW_BATTERY + (sv_icon_battery.height - sv_icon_charging.height) / 2,
-                         &sv_icon_charging, 2);
+                         &sv_icon_charging, 1);
         return;
     }
 
@@ -206,7 +209,7 @@ static void draw_battery(const struct sv_state *state) {
     int level = state->battery > 100 ? 100 : state->battery;
     int cells = (level + 19) / 20;
     for (int i = 0; i < cells; i++) {
-        draw_rect(x + 4 + i * 6, ROW_BATTERY + 4, 4, 8);
+        draw_rect(x + 3 + i * 4, ROW_BATTERY + 3, 3, 6);
     }
 }
 
