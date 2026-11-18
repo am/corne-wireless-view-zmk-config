@@ -1,0 +1,13 @@
+config NICE_VIEW_SIMPLE
+    bool "Simple vertical nice!view status screen"
+    depends on ZMK_DISPLAY && ZMK_DISPLAY_STATUS_SCREEN_CUSTOM
+    select LV_USE_IMG
+    select LV_USE_CANVAS
+    select LV_FONT_MONTSERRAT_26
+    select LV_FONT_MONTSERRAT_18
+    select LV_FONT_MONTSERRAT_16
+    select ZMK_WPM if !ZMK_SPLIT || ZMK_SPLIT_ROLE_CENTRAL
+    help
+      ZMK's built-in status screen (output, battery, layer, WPM) laid out
+      vertically for a nice!view mounted upright, as on a Corne.
+      Requires CONFIG_NICE_VIEW_WIDGET_STATUS=n.
