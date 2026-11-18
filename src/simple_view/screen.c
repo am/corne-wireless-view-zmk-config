@@ -220,14 +220,11 @@ static lv_obj_t *create_canvas(lv_obj_t *parent, lv_color_t cbuf[], lv_align_t a
 lv_obj_t *zmk_display_status_screen() {
     lv_obj_t *screen = lv_obj_create(NULL);
 
-    lv_obj_t *frame = lv_obj_create(screen);
-    lv_obj_set_size(frame, 160, 68);
-    lv_obj_align(frame, LV_ALIGN_TOP_LEFT, 0, 0);
-
-    /* Same placement as the stock widget: top tile at the panel's right end. */
-    canvas_top = create_canvas(frame, cbuf_top, LV_ALIGN_TOP_RIGHT, 0);
-    canvas_middle = create_canvas(frame, cbuf_middle, LV_ALIGN_TOP_LEFT, 24);
-    canvas_bottom = create_canvas(frame, cbuf_bottom, LV_ALIGN_TOP_LEFT, -44);
+    /* Same placement as the stock widget: top tile at the panel's right end.
+     * The canvases sit on the screen itself, so no theme padding shifts them. */
+    canvas_top = create_canvas(screen, cbuf_top, LV_ALIGN_TOP_RIGHT, 0);
+    canvas_middle = create_canvas(screen, cbuf_middle, LV_ALIGN_TOP_LEFT, 24);
+    canvas_bottom = create_canvas(screen, cbuf_bottom, LV_ALIGN_TOP_LEFT, -44);
 
     redraw_top();
     redraw_middle();

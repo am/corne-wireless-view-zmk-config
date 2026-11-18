@@ -108,14 +108,26 @@ void sv_draw_middle(lv_obj_t *canvas, lv_color_t cbuf[], const struct sv_state *
         name = fallback;
     }
 
+    /* Largest font that fits on one line; past the smallest, cut the name. */
     const lv_font_t *fonts[] = {&lv_font_montserrat_26, &lv_font_montserrat_18,
-                                &lv_font_montserrat_16};
-    const lv_font_t *font = fonts[ARRAY_SIZE(fonts) - 1];
+                                &lv_font_montserrat_16, &lv_font_montserrat_14};
+    const lv_font_t *font = NULL;
     for (int i = 0; i < ARRAY_SIZE(fonts); i++) {
         if (text_width(name, fonts[i]) <= TEXT_W) {
             font = fonts[i];
             break;
         }
+    }
+
+    char cut[24];
+    if (font == NULL) {
+        font = fonts[ARRAY_SIZE(fonts) - 1];
+        strncpy(cut, name, sizeof(cut) - 1);
+        cut[sizeof(cut) - 1] = '\0';
+        for (size_t len = strlen(cut); len > 1 && text_width(cut, font) > TEXT_W; len--) {
+            cut[len - 1] = '\0';
+        }
+        name = cut;
     }
     label.font = font;
 
