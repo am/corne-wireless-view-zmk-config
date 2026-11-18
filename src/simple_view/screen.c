@@ -49,11 +49,11 @@ static lv_color_t cbuf[PANEL_W * PANEL_H];
 
 static struct sv_state state = {.peripheral = !SV_CENTRAL};
 
-void sv_px(int x, int y) {
+void sv_px(int x, int y, bool on) {
     if (x < 0 || x >= SV_WIDTH || y < 0 || y >= SV_HEIGHT) {
         return;
     }
-    cbuf[x * PANEL_W + (PANEL_W - 1 - y)] = FOREGROUND;
+    cbuf[x * PANEL_W + (PANEL_W - 1 - y)] = on ? FOREGROUND : BACKGROUND;
 }
 
 static void redraw(void) {
@@ -152,21 +152,16 @@ ZMK_SUBSCRIPTION(sv_output, zmk_ble_active_profile_changed);
 
 struct layer_state {
     uint8_t index;
-    const char *label;
 };
 
 static void layer_update_cb(struct layer_state layer) {
     state.layer_index = layer.index;
-    state.layer_label = layer.label;
+    state.layer_count = ZMK_KEYMAP_LAYERS_LEN;
     redraw();
 }
 
 static struct layer_state layer_get_state(const zmk_event_t *_eh) {
-    zmk_keymap_layer_index_t index = zmk_keymap_highest_layer_active();
-    return (struct layer_state){
-        .index = index,
-        .label = zmk_keymap_layer_name(zmk_keymap_layer_index_to_id(index)),
-    };
+    return (struct layer_state){.index = zmk_keymap_highest_layer_active()};
 }
 
 ZMK_DISPLAY_WIDGET_LISTENER(sv_layer, struct layer_state, layer_update_cb, layer_get_state)
@@ -180,9 +175,61 @@ struct link_state {
     bool connected;
 };
 
+/*
+ * Swell animation. It plays one loop when the screen starts (power on, reset,
+ * waking from deep sleep) and when the link to the central half comes up,
+ * then rests on its first frame so that nothing is redrawn while typing.
+ *
+ * It runs as an LVGL timer, on the display work queue with everything else
+ * that draws, and the timer is paused whenever the animation is not playing.
+ */
+#if IS_ENABLED(CONFIG_NICE_VIEW_SIMPLE_ANIMATION)
+
+static lv_timer_t *swell_timer;
+static int swell_frames_left;
+
+static void swell_tick(lv_timer_t *timer) {
+    if (--swell_frames_left <= 0) {
+        state.frame = 0;
+        lv_timer_pause(timer);
+    } else {
+        state.frame++;
+    }
+    redraw();
+}
+
+static void swell_play(void) {
+    if (swell_timer == NULL) {
+        return;
+    }
+    if (swell_frames_left <= 0) {
+        state.frame = 0;
+        lv_timer_resume(swell_timer);
+    }
+    /* Already playing: carry on from the current frame to the end of a loop. */
+    swell_frames_left = SV_SWELL_FRAMES - state.frame % SV_SWELL_FRAMES;
+}
+
+static void swell_init(void) {
+    swell_timer = lv_timer_create(swell_tick, CONFIG_NICE_VIEW_SIMPLE_ANIMATION_FRAME_MS, NULL);
+    lv_timer_pause(swell_timer);
+    swell_play();
+}
+
+#else
+
+static void swell_play(void) {}
+static void swell_init(void) {}
+
+#endif /* CONFIG_NICE_VIEW_SIMPLE_ANIMATION */
+
 static void link_update_cb(struct link_state link) {
+    bool came_up = link.connected && !state.connected;
     state.connected = link.connected;
     redraw();
+    if (came_up) {
+        swell_play();
+    }
 }
 
 static struct link_state link_get_state(const zmk_event_t *_eh) {
@@ -208,6 +255,7 @@ lv_obj_t *zmk_display_status_screen() {
     sv_layer_init();
 #else
     sv_link_init();
+    swell_init();
 #endif
 
     return screen;

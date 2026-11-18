@@ -2,8 +2,8 @@
  * Simple vertical nice!view status screen: drawing.
  *
  * The screen is drawn as a 68x160 portrait image, one bit per pixel, straight
- * from bitmap fonts and icons: nothing is scaled, rotated or smoothed on the
- * way. sv_render() calls sv_px() for every lit pixel; the caller clears its
+ * from bitmap icons: nothing is scaled, rotated or smoothed on the
+ * way. sv_render() calls sv_px() for the pixels it sets; the caller clears its
  * buffer first and maps portrait pixels to the panel.
  */
 
@@ -14,6 +14,9 @@
 
 #define SV_WIDTH 68
 #define SV_HEIGHT 160
+
+/* Frames in one loop of the peripheral's swell animation. */
+#define SV_SWELL_FRAMES 128
 
 enum sv_output {
     SV_OUTPUT_NONE,
@@ -34,11 +37,15 @@ struct sv_state {
     bool connected;
     bool bonded;
 
+    /* Central: highest active layer and the number of keymap layers. */
     uint8_t layer_index;
-    const char *layer_label;
+    uint8_t layer_count;
+
+    /* Peripheral: frame of the swell animation, any value. */
+    int frame;
 };
 
-/* Provided by the caller: light one pixel of the portrait image. */
-void sv_px(int x, int y);
+/* Provided by the caller: set or clear one pixel of the portrait image. */
+void sv_px(int x, int y, bool on);
 
 void sv_render(const struct sv_state *state);

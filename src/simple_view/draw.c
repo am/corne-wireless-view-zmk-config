@@ -1,46 +1,38 @@
 /*
  * Simple vertical nice!view status screen: drawing. See draw.h.
  *
- * Layout (x 2..65 is the content column):
+ * Central half, top to bottom:
  *
- *   y   4   connection icon (USB / Bluetooth) left, link status right
- *   y  36   one circle per Bluetooth profile, the selected one filled
- *   y  54   ---------
- *           layer name, centred in the band
- *   y 126   ---------
- *   y 132   battery left, bolt right while charging
+ *   connection icon (USB / Bluetooth) and link status, inset from the edges
+ *   one circle per Bluetooth profile, the selected one filled
+ *   one tile per keymap layer, stacked, the active one solid
+ *   battery: five cells, or a bolt while charging
+ *
+ * Peripheral half: link icon and status, a field of swell lines, battery.
+ *
+ * Integer arithmetic only: the keyboard builds without an FPU.
  */
 
-#include <stdio.h>
-#include <string.h>
+#include <stddef.h>
 
 #include "assets.h"
 #include "draw.h"
 
-#define MARGIN 2
-#define RIGHT (SV_WIDTH - MARGIN)
-
+#define OUTPUT_H 32
+#define OUTPUT_INSET 8
 #define ROW_OUTPUT 4
-#define ROW_PROFILES 36
-#define RULE_1 54
-#define RULE_2 126
-#define ROW_BATTERY 132
+#define ROW_PROFILES (ROW_OUTPUT + OUTPUT_H + 8)
+#define ROW_BATTERY (SV_HEIGHT - 8 - 16)
 
 #define MAX_PROFILES 5
 #define PROFILE_GAP 3
-
-/* Layer names may run one pixel into each margin. */
-#define NAME_W (SV_WIDTH - 2)
-#define NAME_MAX 24
-/* A name this many pixels too wide is tightened instead of shrunk. */
-#define MAX_TIGHTEN 3
 
 static void draw_bitmap(int x, int y, int width, int height, const uint8_t *data) {
     int stride = (width + 7) / 8;
     for (int row = 0; row < height; row++) {
         for (int col = 0; col < width; col++) {
             if (data[row * stride + col / 8] & (0x80 >> (col % 8))) {
-                sv_px(x + col, y + row);
+                sv_px(x + col, y + row, true);
             }
         }
     }
@@ -50,81 +42,58 @@ static void draw_icon(int x, int y, const struct sv_icon *icon) {
     draw_bitmap(x, y, icon->width, icon->height, icon->data);
 }
 
-static void draw_icon_right(int y, const struct sv_icon *icon) {
-    /* Centred on the 24 px row. */
-    draw_icon(RIGHT - icon->width, y + (24 - icon->height) / 2, icon);
+/* Draw an icon after clearing `border` pixels around each of its pixels. */
+static void draw_icon_cutout(int x, int y, const struct sv_icon *icon, int border) {
+    int stride = (icon->width + 7) / 8;
+    for (int row = 0; row < icon->height; row++) {
+        for (int col = 0; col < icon->width; col++) {
+            if (!(icon->data[row * stride + col / 8] & (0x80 >> (col % 8)))) {
+                continue;
+            }
+            for (int dy = -border; dy <= border; dy++) {
+                for (int dx = -border; dx <= border; dx++) {
+                    sv_px(x + col + dx, y + row + dy, false);
+                }
+            }
+        }
+    }
+    draw_icon(x, y, icon);
 }
 
 static void draw_rect(int x, int y, int width, int height) {
     for (int row = 0; row < height; row++) {
         for (int col = 0; col < width; col++) {
-            sv_px(x + col, y + row);
+            sv_px(x + col, y + row, true);
         }
-    }
-}
-
-/* Dotted rule across the content column. */
-static void draw_rule(int y) {
-    for (int x = MARGIN; x < RIGHT; x += 2) {
-        sv_px(x, y);
-    }
-}
-
-static const struct sv_glyph *glyph(const struct sv_font *font, char c) {
-    uint8_t code = (uint8_t)c;
-    if (code < font->first || code >= font->first + font->count) {
-        code = '?';
-    }
-    return &font->glyphs[code - font->first];
-}
-
-/* Width of the lit pixels of a line of text, from the first glyph's left
- * edge to the last glyph's right edge. */
-static int text_width(const struct sv_font *font, const char *text) {
-    size_t len = strlen(text);
-    if (len == 0) {
-        return 0;
-    }
-    int pen = 0;
-    for (size_t i = 0; i + 1 < len; i++) {
-        pen += glyph(font, text[i])->advance;
-    }
-    const struct sv_glyph *first = glyph(font, text[0]);
-    const struct sv_glyph *last = glyph(font, text[len - 1]);
-    return pen + last->x + last->width - first->x;
-}
-
-/* Draw text centred on the screen with its baseline at y. The first
- * `tighten` letter pairs are set one pixel closer, to fit a name that is a
- * few pixels too wide. */
-static void draw_text_centered(int baseline, const struct sv_font *font, const char *text,
-                               int tighten) {
-    int width = text_width(font, text) - tighten;
-    int pen = (SV_WIDTH - width) / 2 - glyph(font, text[0])->x;
-
-    for (int i = 0; text[i] != '\0'; i++) {
-        const struct sv_glyph *g = glyph(font, text[i]);
-        draw_bitmap(pen + g->x, baseline - font->ascent + g->top, g->width, g->height,
-                    font->data + g->offset);
-        pen += g->advance - (i < tighten ? 1 : 0);
     }
 }
 
 static void draw_output(const struct sv_state *state) {
+    const struct sv_icon *icon = NULL;
+    const struct sv_icon *status = NULL;
+
     if (state->peripheral) {
-        draw_icon(MARGIN, ROW_OUTPUT, &sv_icon_bluetooth);
-        draw_icon_right(ROW_OUTPUT, state->connected ? &sv_icon_ok : &sv_icon_off);
+        icon = &sv_icon_bluetooth;
+        status = state->connected ? &sv_icon_ok : &sv_icon_off;
     } else if (state->output == SV_OUTPUT_USB) {
-        draw_icon(MARGIN, ROW_OUTPUT, &sv_icon_usb);
-        draw_icon_right(ROW_OUTPUT, &sv_icon_ok);
+        icon = &sv_icon_usb;
+        status = &sv_icon_ok;
     } else if (state->output == SV_OUTPUT_BLE) {
-        draw_icon(MARGIN, ROW_OUTPUT, &sv_icon_bluetooth);
+        icon = &sv_icon_bluetooth;
         if (!state->bonded) {
-            draw_icon_right(ROW_OUTPUT, &sv_icon_pairing);
+            status = &sv_icon_pairing;
         } else {
-            draw_icon_right(ROW_OUTPUT, state->connected ? &sv_icon_ok : &sv_icon_off);
+            status = state->connected ? &sv_icon_ok : &sv_icon_off;
         }
     }
+    if (icon == NULL) {
+        return;
+    }
+
+    /* Both sit inset from the edges, centred on the row. */
+    draw_icon(OUTPUT_INSET, ROW_OUTPUT + (OUTPUT_H - icon->height) / 2, icon);
+    draw_icon(SV_WIDTH - OUTPUT_INSET - status->width,
+              ROW_OUTPUT + (OUTPUT_H - status->height) / 2, status);
 }
 
 static void draw_profiles(const struct sv_state *state) {
@@ -141,68 +110,226 @@ static void draw_profiles(const struct sv_state *state) {
     }
 }
 
-static void draw_layer(const struct sv_state *state) {
-    char name[NAME_MAX];
-    if (state->layer_label == NULL || state->layer_label[0] == '\0') {
-        snprintf(name, sizeof(name), "L%d", state->layer_index);
-    } else {
-        strncpy(name, state->layer_label, sizeof(name) - 1);
-        name[sizeof(name) - 1] = '\0';
+/*
+ * Layer stack: one flat square per keymap layer seen from above at an angle,
+ * the base layer at the bottom. Every edge is a 2:1 pixel line (two pixels
+ * across for each pixel down), so the shapes have no uneven steps.
+ *
+ * Row i of a tile is 4 * (i + 1) pixels wide down to the middle, then narrows
+ * again: TILE_N rows each way.
+ */
+#define TILE_N 14
+#define TILE_W (4 * TILE_N)
+#define TILE_H (2 * TILE_N)
+#define TILE_STEP 12
+#define TILE_LINE 2
+
+/* Half the width of tile row `row`, or 0 outside the tile. */
+static int tile_half(int row) {
+    if (row < 0 || row >= TILE_H) {
+        return 0;
     }
+    return row < TILE_N ? 2 * (row + 1) : 2 * (TILE_H - row);
+}
 
-    /* One size for every name that fits; step down only for longer names,
-     * and cut what does not fit even the smallest font. */
-    const struct sv_font *fonts[] = {&sv_font_helvB18, &sv_font_helvB14, &sv_font_helvB10};
-    const struct sv_font *font = NULL;
-    int tighten = 0;
+enum tile_style {
+    TILE_ACTIVE,   /* solid */
+    TILE_INACTIVE, /* outline */
+    TILE_TOP,      /* the highest layer: horizontal lines, no outline */
+};
 
-    for (int i = 0; i < 3 && font == NULL; i++) {
-        int over = text_width(fonts[i], name) - NAME_W;
-        if (over <= 0) {
-            font = fonts[i];
-        } else if (over <= MAX_TIGHTEN && over < (int)strlen(name)) {
-            font = fonts[i];
-            tighten = over;
+static void draw_tile(int cx, int top, enum tile_style style) {
+    for (int row = 0; row < TILE_H; row++) {
+        int half = tile_half(row);
+        /* A pixel is on the outline when the tile does not reach it
+         * TILE_LINE rows further up or down. */
+        int inner_up = tile_half(row - TILE_LINE);
+        int inner_down = tile_half(row + TILE_LINE);
+        int inner = inner_up < inner_down ? inner_up : inner_down;
+
+        for (int dx = -half; dx < half; dx++) {
+            int ax = dx < 0 ? -dx - 1 : dx; /* distance from the centre line */
+            bool on;
+
+            if (style == TILE_ACTIVE) {
+                on = true;
+            } else if (style == TILE_INACTIVE) {
+                on = ax >= inner;
+            } else {
+                on = row % 2 == 0;
+            }
+            /* Clearing as well as setting: a tile hides what is under it. */
+            sv_px(cx + dx, top + row, on);
         }
     }
-    if (font == NULL) {
-        font = fonts[2];
-        for (size_t len = strlen(name); len > 1 && text_width(font, name) > NAME_W; len--) {
-            name[len - 1] = '\0';
-        }
-    }
+}
 
-    /* Centre the capital height in the band between the two rules. */
-    int cap = glyph(font, 'H')->height;
-    int baseline = (RULE_1 + RULE_2) / 2 + cap / 2;
-    draw_text_centered(baseline, font, name, tighten);
+static void draw_layers(const struct sv_state *state, int band_top, int band_bottom) {
+    int count = state->layer_count;
+    if (count < 1) {
+        return;
+    }
+    int step = TILE_STEP;
+    while (count > 1 && TILE_H + (count - 1) * step > band_bottom - band_top && step > 4) {
+        step--;
+    }
+    int height = TILE_H + (count - 1) * step;
+    int bottom_tile = band_top + (band_bottom - band_top - height) / 2 + (count - 1) * step;
+
+    /* Bottom layer first; each tile covers the ones under it. */
+    for (int i = 0; i < count; i++) {
+        enum tile_style style = TILE_INACTIVE;
+        if (i == state->layer_index) {
+            style = TILE_ACTIVE;
+        } else if (i == count - 1) {
+            style = TILE_TOP;
+        }
+        draw_tile(SV_WIDTH / 2, bottom_tile - i * step, style);
+    }
 }
 
 static void draw_battery(const struct sv_state *state) {
-    int level = state->battery > 100 ? 100 : state->battery;
-
-    /* The cell inside the battery outline is 10 px wide; fill it in 2 px
-     * steps, and keep one step lit until the battery is truly empty. */
-    int fill = (level + 10) / 20 * 2;
-    if (fill == 0 && level > 0) {
-        fill = 2;
-    }
-    draw_icon(MARGIN, ROW_BATTERY, &sv_icon_battery);
-    draw_rect(MARGIN + 6, ROW_BATTERY + 9, fill, 6);
+    int x = (SV_WIDTH - sv_icon_battery.width) / 2;
+    draw_icon(x, ROW_BATTERY, &sv_icon_battery);
 
     if (state->charging) {
-        draw_icon_right(ROW_BATTERY, &sv_icon_charging);
+        /* The bolt stands over the battery, taller than it, with a clear
+         * border so it reads against the outline. */
+        draw_icon_cutout(x + 2 + (32 - sv_icon_charging.width) / 2,
+                         ROW_BATTERY + (sv_icon_battery.height - sv_icon_charging.height) / 2,
+                         &sv_icon_charging, 2);
+        return;
+    }
+
+    /* Five cells of 20 % each; the first stays lit until the battery is
+     * truly empty. */
+    int level = state->battery > 100 ? 100 : state->battery;
+    int cells = (level + 19) / 20;
+    for (int i = 0; i < cells; i++) {
+        draw_rect(x + 4 + i * 6, ROW_BATTERY + 4, 4, 8);
+    }
+}
+
+/*
+ * Swell: wavy lines stacked down the screen, nearer lines hiding the ones
+ * behind them. Each line is the sum of three sine waves of different lengths
+ * that move at different speeds as `frame` advances, and the whole field
+ * drifts down one pixel every two frames. SV_SWELL_FRAMES frames make a
+ * seamless loop.
+ *
+ * Angles are 16-bit, 65536 to a turn; heights are in 1/64 pixel.
+ */
+#define SWELL_TOP 42
+#define SWELL_BOTTOM 130 /* first row below the field */
+#define SWELL_STEP 8     /* rows between lines */
+#define SWELL_PHASES 8   /* lines until the shapes repeat */
+#define SWELL_FIRST (-2)
+#define SWELL_LAST 26
+
+#define TURN 65536
+#define FP 64
+
+/* sin() over one turn in 256 steps, scaled to +-127. */
+static const int8_t sine[256] = {
+       0,    3,    6,    9,   12,   16,   19,   22,   25,   28,   31,   34,
+      37,   40,   43,   46,   49,   51,   54,   57,   60,   63,   65,   68,
+      71,   73,   76,   78,   81,   83,   85,   88,   90,   92,   94,   96,
+      98,  100,  102,  104,  106,  107,  109,  111,  112,  113,  115,  116,
+     117,  118,  120,  121,  122,  122,  123,  124,  125,  125,  126,  126,
+     126,  127,  127,  127,  127,  127,  127,  127,  126,  126,  126,  125,
+     125,  124,  123,  122,  122,  121,  120,  118,  117,  116,  115,  113,
+     112,  111,  109,  107,  106,  104,  102,  100,   98,   96,   94,   92,
+      90,   88,   85,   83,   81,   78,   76,   73,   71,   68,   65,   63,
+      60,   57,   54,   51,   49,   46,   43,   40,   37,   34,   31,   28,
+      25,   22,   19,   16,   12,    9,    6,    3,    0,   -3,   -6,   -9,
+     -12,  -16,  -19,  -22,  -25,  -28,  -31,  -34,  -37,  -40,  -43,  -46,
+     -49,  -51,  -54,  -57,  -60,  -63,  -65,  -68,  -71,  -73,  -76,  -78,
+     -81,  -83,  -85,  -88,  -90,  -92,  -94,  -96,  -98, -100, -102, -104,
+    -106, -107, -109, -111, -112, -113, -115, -116, -117, -118, -120, -121,
+    -122, -122, -123, -124, -125, -125, -126, -126, -126, -127, -127, -127,
+    -127, -127, -127, -127, -126, -126, -126, -125, -125, -124, -123, -122,
+    -122, -121, -120, -118, -117, -116, -115, -113, -112, -111, -109, -107,
+    -106, -104, -102, -100,  -98,  -96,  -94,  -92,  -90,  -88,  -85,  -83,
+     -81,  -78,  -76,  -73,  -71,  -68,  -65,  -63,  -60,  -57,  -54,  -51,
+     -49,  -46,  -43,  -40,  -37,  -34,  -31,  -28,  -25,  -22,  -19,  -16,
+     -12,   -9,   -6,   -3,
+};
+
+static int sin127(int32_t angle) { return sine[((uint32_t)angle >> 8) & 0xff]; }
+
+/* Height of line `k` above its baseline at column x, in 1/64 pixel. */
+static int swell_height(int x, int k, int frame) {
+    int32_t t = frame * (TURN / (SV_SWELL_FRAMES / 2));
+    int32_t line = k * (TURN / SWELL_PHASES);
+
+    int swing = (FP * 24 / 10) + (FP * 14 / 10) * sin127(t + line) / 127;
+    int height = FP * 35 / 10;
+    height += swing * sin127(x * TURN / 40 + line - t) / 127;
+    height += FP * sin127(x * TURN / 20 - line + 2 * t) / 127;
+    height += (FP * 14 / 10) * sin127(x * TURN / 68 + 2 * line + t) / 127;
+    return height;
+}
+
+/* Lines thin out to dashes over the last rows before the icons. */
+static bool swell_visible(int x, int y) {
+    int edge = y - SWELL_TOP < SWELL_BOTTOM - 1 - y ? y - SWELL_TOP : SWELL_BOTTOM - 1 - y;
+    if (edge < 0) {
+        return false;
+    }
+    int dash = edge < 5 ? 2 : edge < 10 ? 3 : 4;
+    return x % 4 < dash;
+}
+
+static void draw_swell(int frame) {
+    /* Highest row drawn so far in each column: lines behind stay under it. */
+    int16_t horizon[SV_WIDTH];
+    for (int x = 0; x < SV_WIDTH; x++) {
+        horizon[x] = SWELL_BOTTOM;
+    }
+
+    frame %= SV_SWELL_FRAMES;
+    if (frame < 0) {
+        frame += SV_SWELL_FRAMES;
+    }
+
+    /* Nearest line first. */
+    for (int k = SWELL_FIRST; k <= SWELL_LAST; k++) {
+        int base = SV_HEIGHT + 6 - k * SWELL_STEP + frame / 2;
+        int16_t rows[SV_WIDTH];
+
+        for (int x = 0; x < SV_WIDTH; x++) {
+            rows[x] = base - ((swell_height(x, k, frame) + FP / 2) >> 6);
+        }
+        for (int x = 0; x < SV_WIDTH; x++) {
+            /* Join to the previous column so the line has no gaps. */
+            int from = rows[x], to = rows[x];
+            if (x > 0 && rows[x - 1] < rows[x] - 1) {
+                from = rows[x - 1] + 1;
+            } else if (x > 0 && rows[x - 1] > rows[x] + 1) {
+                to = rows[x - 1] - 1;
+            }
+            for (int row = from; row <= to; row++) {
+                if (row < horizon[x] && swell_visible(x, row)) {
+                    sv_px(x, row, true);
+                }
+            }
+        }
+        for (int x = 0; x < SV_WIDTH; x++) {
+            if (rows[x] < horizon[x]) {
+                horizon[x] = rows[x];
+            }
+        }
     }
 }
 
 void sv_render(const struct sv_state *state) {
     draw_output(state);
-    draw_rule(RULE_1);
-    draw_rule(RULE_2);
     draw_battery(state);
 
-    if (!state->peripheral) {
+    if (state->peripheral) {
+        draw_swell(state->frame);
+    } else {
         draw_profiles(state);
-        draw_layer(state);
+        draw_layers(state, ROW_PROFILES + 10, ROW_BATTERY);
     }
 }
