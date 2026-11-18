@@ -8,15 +8,15 @@
 # shield: [ "corne_left", "corne_right" ]
 # include:
 #   - board: bdn9_rev2
-#   - board: nice_nano_v2
+#   - board: nice_nano//zmk
 #     shield: reviung41
 #
 # Bump the number below to invalidate the Actions cache (comment only, not in matrix)
-# cache: 2
+# cache: 3
 ---
 include:
-  - board: nice_nano_v2
+  - board: nice_nano//zmk
     shield: corne_left nice_view_adapter nice_view_gem
     snippet: studio-rpc-usb-uart
-  - board: nice_nano_v2
+  - board: nice_nano//zmk
     shield: corne_right nice_view_adapter nice_view_gem
