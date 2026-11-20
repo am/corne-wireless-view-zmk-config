@@ -7,10 +7,10 @@ manifest:
   projects:
     - name: zmk
       remote: zmkfirmware
-      revision: v0.3
+      revision: main
       import: app/west.yml
     - name: nice-view-strata
       remote: am
-      revision: main
+      revision: claude/project-thread-5scpoh
   self:
     path: config
