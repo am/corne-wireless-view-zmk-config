@@ -11,6 +11,6 @@ manifest:
       import: app/west.yml
     - name: nice-view-strata
       remote: am
-      revision: claude/project-thread-5scpoh
+      revision: c4564ab7a6bc5ff3de761d926644ec2039bced56
   self:
     path: config
